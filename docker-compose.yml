@@ -1,0 +1,130 @@
+
+services:
+
+  # ============================================================
+  # BASE DE DONNÉES MYSQL — base unique biblio_dit
+  # ============================================================
+  mysql:
+    image: mysql:8.0
+    container_name: bibliotheque-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: biblio_dit
+    ports:
+      - "3308:3308"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    networks:
+      - bibliotheque-network
+
+  # ============================================================
+  # MICROSERVICE LIVRES
+  # ============================================================
+  books-service:
+    build:
+      context: ./services/books-service
+      dockerfile: Dockerfile
+    container_name: bibliotheque-books
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root_password
+      DB_NAME: biblio_dit
+    ports:
+      - "3001:3001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - bibliotheque-network
+
+  # ============================================================
+  # MICROSERVICE UTILISATEURS
+  # ============================================================
+  users-service:
+    build:
+      context: ./services/users-service
+      dockerfile: Dockerfile
+    container_name: bibliotheque-users
+    restart: unless-stopped
+    environment:
+      PORT: 3002
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root_password
+      DB_NAME: biblio_dit
+    ports:
+      - "3002:3002"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - bibliotheque-network
+
+  # ============================================================
+  # MICROSERVICE EMPRUNTS
+  # ============================================================
+  loans-service:
+    build:
+      context: ./services/loans-service
+      dockerfile: Dockerfile
+    container_name: bibliotheque-loans
+    restart: unless-stopped
+    environment:
+      PORT: 3003
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root_password
+      DB_NAME: biblio_dit
+      BOOKS_SERVICE_URL: http://books-service:3001
+      USERS_SERVICE_URL: http://users-service:3002
+    ports:
+      - "3003:3003"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      books-service:
+        condition: service_started
+      users-service:
+        condition: service_started
+    networks:
+      - bibliotheque-network
+
+  # ============================================================
+  # FRONTEND (Nginx)
+  # ============================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bibliotheque-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - books-service
+      - users-service
+      - loans-service
+    networks:
+      - bibliotheque-network
+
+networks:
+  bibliotheque-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
