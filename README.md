@@ -55,7 +55,7 @@ Application web de gestion de bibliothèque académique basée sur une **archite
 ### 1. Cloner le dépôt
 
 ```bash
-git clone https://github.com/VOTRE_USERNAME/bibliotheque-numerique.git
+git clone https://github.com/maihelene/bibliotheque-dit.git
 cd bibliotheque-numerique
 ```
 
